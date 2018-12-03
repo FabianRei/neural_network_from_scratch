@@ -21,16 +21,7 @@ y_test = mnist["test_labels"]
 # labels = labels[selector]
 # Image.fromarray(x_train[2].reshape(28,28)).show()
 
-class TorchNet(nn.Module):
-    def __init__(self, dimIn, dimOut):
-        super(TorchNet, self).__init__()
-        self.fc1 = nn.Linear(dimIn, 100)
-        self.fc2 = nn.Linear(100, dimOut)
 
-    def forward(self, x):
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        return F.log_softmax(x, dim=1)
 
 
 learningRate = 0.0001
@@ -56,6 +47,7 @@ def train(epochs, batchSize, x, y, Net):
             loss.backward()
             optimizer.step()
             print(f'prediction/label:\n{prediction}\n{currLabels}\nloss is :{loss}\n')
+    return Net
 
 train(1, 2, x_train, y_train, Net)
 
