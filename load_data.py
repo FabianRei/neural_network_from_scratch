@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from torch import optim
 from torch.autograd import Variable
 import torch
-
+from TorchNet import TorchNet
 
 mnist = pickle.load(open('mnist.pkl', 'rb'))
 x_train = mnist["training_images"]
@@ -49,8 +49,7 @@ def train(epochs, batchSize, x, y, Net):
             print(f'prediction/label:\n{prediction}\n{currLabels}\nloss is :{loss}\n')
     return Net
 
-train(1, 2, x_train, y_train, Net)
-
+Net.trainNet(x_train, y_train)
 def logSoftmax(x):
     return np.log(np.exp(x)/np.sum(np.exp(x), axis=0))
 
