@@ -15,7 +15,7 @@ Net.trainNet(x_train, y_train, epochs=1)
 MyNet = NumpyNet(784, 10)
 MyNet.loadWeights(Net.fc1.weight, Net.fc1.bias, Net.fc2.weight, Net.fc2.bias)
 print(y_test[-30:])
-y_pred = MyNet.forward(x_test[-30:])
+y_pred = MyNet.train(x_test[-30:], y_test[-30:])
 print(f'my Net predicts {np.argmax(y_pred, 1)}')
 print('nice')
 

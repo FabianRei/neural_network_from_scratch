@@ -1,8 +1,8 @@
 import numpy as np
 
 
-def logSoftmax(x):
-    return np.log(np.exp(x)/np.sum(np.exp(x), axis=0))
+def softmax(x):
+    return np.exp(x)/np.sum(np.exp(x), axis=0)
 
 
 class NumpyNet:
@@ -15,9 +15,10 @@ class NumpyNet:
         self.w2 = 0
         self.b2 = 0
         self.initialize()
-        self.activationList1 = []
-        self.activationList1_relu = []
-        self.activationList2 = []
+        self.activation1 = 0
+        self.activation1_relu = 0
+        self.activation2 = 0
+        self.activation2_softmax = 0
 
     def initialize(self):
         """
@@ -38,23 +39,35 @@ class NumpyNet:
         self.w2 = w2.detach().numpy()
         self.b2 = b2.detach().numpy()
 
-    def forward(self, x, trainMode=False):
+    def forward(self, x):
         x = x.transpose()
-        activation1 = np.matmul(self.w1, x) + np.expand_dims(self.b1, 0).transpose()
-        activation1_relu = np.maximum(activation1, 0)
-        activation2 = np.matmul(self.w2, activation1_relu) + np.expand_dims(self.b2, 0).transpose()
-        if trainMode:
-            self.activationList1.append(activation1)
-            self.activationList1_relu.append(activation1_relu)
-            self.activationList2.append(activation2)
-        return logSoftmax(activation2).transpose()
+        self.activation1 = np.matmul(self.w1, x) + np.expand_dims(self.b1, 0).transpose()
+        self.activation1_relu = np.maximum(self.activation1, 0)
+        self.activation2 = np.matmul(self.w2, self.activation1_relu) + np.expand_dims(self.b2, 0).transpose()
+        self.activation2_softmax = softmax(self.activation2).transpose()
+        return self.activation2_softmax
 
     def zeroGrad(self):
-        self.activationList1 = []
-        self.activationList1_relu = []
-        self.activationList2 = []
+        self.activation1 = 0
+        self.activation1_relu = 0
+        self.activation2 = 0
+        self.activation2_softmax = 0
 
-    def train(self, x, y, batchSize=1, shuffle=True):
+    def get_gradients(self, target):
+        """ This is the hardest part.
+        https://stats.stackexchange.com/questions/235528/backpropagation-with-softmax-cross-entropy is really helpful
+        in understanding the topic. The way to go is to calculate the gradient for each forward pass activation.
+        This then will be averaged and subtracted under perform_backprop """
+
+        gradient2_softmax_temp = -1/self.activation2_softmax[np.arange(len(self.activation2_softmax)), target]
+        # change vector into matrix
+        gradient_matrix = np.zeros((self.activation2_softmax.shape))
+        gradient_matrix[np.arange(len(gradient_matrix)), target] = gradient2_softmax_temp
+        self.gradient2_softmax = gradient_matrix
+        local_gradient2 = 0
+        self.gradient2 = 0
+
+    def train(self, x, y, batchSize=3, shuffle=True):
         xEpoch = x
         yEpoch = y
         if shuffle:
@@ -70,12 +83,13 @@ class NumpyNet:
             currData = xEpoch[start:end]
             currLabels = yEpoch[start:end]
             self.zeroGrad()
-            pred = self.forward(currData, trainMode=True)
+            pred = self.forward(currData)
             loss = self.getNllLoss(pred, currLabels)
+            self.get_gradients(currLabels)
 
 
 
     @staticmethod
     def getNllLoss(pred, target):
-        return -np.mean(pred[np.arange(len(pred)), target])
+        return -np.log(pred[np.arange(len(pred)), target])
 
