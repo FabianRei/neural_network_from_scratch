@@ -57,14 +57,28 @@ class NumpyNet:
         """ This is the hardest part.
         https://stats.stackexchange.com/questions/235528/backpropagation-with-softmax-cross-entropy is really helpful
         in understanding the topic. The way to go is to calculate the gradient for each forward pass activation.
-        This then will be averaged and subtracted under perform_backprop """
+        This then will be averaged and subtracted under perform_backprop.
+         A great 'trick' or simplification in this case is that you can update the weights before the sigmoid by 
+         multiplying the hidden layer activation with (softmax_output - target_onehot) of the output neuron it is linked to."""
 
-        gradient2_softmax_temp = -1/self.activation2_softmax[np.arange(len(self.activation2_softmax)), target]
-        # change vector into matrix
-        gradient_matrix = np.zeros((self.activation2_softmax.shape))
-        gradient_matrix[np.arange(len(gradient_matrix)), target] = gradient2_softmax_temp
+        target_onehot = np.zeros((self.activation2_softmax.shape))
+        target_onehot[np.arange(len(target_onehot)), target] = 1
+        softmax_minus_target = self.activation2_softmax - target_onehot
+        # multiply hidden layer activation with (softmax_output - target_onehot) for each combination, ergo each weight
+        w2_gradients = np.stack([sof[:, np.newaxis] @ act[np.newaxis, :] for act, sof in zip(self.activation1_relu.T, softmax_minus_target)], axis=0)
+        b2_gradients = softmax_minus_target
+        # Add up the gradients of all weights connected to the respective activation1 and ignore gradients, where
+        # the activation is <= 0 to account for ReLU activation
+        activation1_gradients = np.multiply(np.sum(np.transpose(w2_gradients, (0,2,1)), axis=2), (self.activation1>0).T)
+        
+        
+        
+        
+        
         self.gradient2_softmax = gradient_matrix
         local_gradient2 = 0
+        """ as all gradients in gradient2_softmax are zero except for one, we only need to look at that one combination.
+        This reduces gradient2 to a formula with one multiplication except for a sun of 10 multiplications."""
         self.gradient2 = 0
 
     def train(self, x, y, batchSize=3, shuffle=True):
