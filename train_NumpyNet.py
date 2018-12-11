@@ -1,8 +1,8 @@
-from readDataFromPickle import loadMnist
+from read_data_from_pickle import load_mnist
 from NumpyNet import NumpyNet
 import numpy as np
 
-x_train, y_train, x_test, y_test = loadMnist('mnist.pkl')
+x_train, y_train, x_test, y_test = load_mnist('mnist.pkl')
 # normalization
 x_train = x_train/255
 x_test = x_test/255

@@ -41,7 +41,7 @@ class NumpyNet:
         self.w2 = np.random.randn(self.dimOut, self.middleLayer) * np.sqrt(2/self.middleLayer)
         self.b2 = np.full(self.dimOut, 0.01)
 
-    def loadWeights(self, w1, b1, w2, b2):
+    def load_torch_weights(self, w1, b1, w2, b2):
         self.w1 = w1.detach().numpy()
         self.b1 = b1.detach().numpy()
         self.w2 = w2.detach().numpy()
