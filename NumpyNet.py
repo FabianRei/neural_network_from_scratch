@@ -6,10 +6,11 @@ def softmax(x):
 
 
 class NumpyNet:
-    def __init__(self, dimIn, dimOut, middleLayer=100):
+    def __init__(self, dimIn, dimOut, middleLayer=100, lr=0.1):
         self.dimIn = dimIn
         self.dimOut = dimOut
         self.middleLayer = middleLayer
+        self.lr = lr
         self.w1 = 0
         self.b1 = 0
         self.w2 = 0
@@ -19,6 +20,13 @@ class NumpyNet:
         self.activation1_relu = 0
         self.activation2 = 0
         self.activation2_softmax = 0
+        self.curr_x = 0
+        self.curr_y = 0
+        self.loss = 0
+        self.w1_gradients = 0
+        self.b1_gradients = 0
+        self.w2_gradients = 0
+        self.b2_gradients = 0
 
     def initialize(self):
         """
@@ -47,13 +55,7 @@ class NumpyNet:
         self.activation2_softmax = softmax(self.activation2).transpose()
         return self.activation2_softmax
 
-    def zeroGrad(self):
-        self.activation1 = 0
-        self.activation1_relu = 0
-        self.activation2 = 0
-        self.activation2_softmax = 0
-
-    def get_gradients(self, target):
+    def get_gradients(self):
         """ This is the hardest part.
         https://stats.stackexchange.com/questions/235528/backpropagation-with-softmax-cross-entropy is really helpful
         in understanding the topic. The way to go is to calculate the gradient for each forward pass activation.
@@ -62,48 +64,59 @@ class NumpyNet:
          multiplying the hidden layer activation with (softmax_output - target_onehot) of the output neuron it is linked to."""
 
         target_onehot = np.zeros((self.activation2_softmax.shape))
-        target_onehot[np.arange(len(target_onehot)), target] = 1
+        target_onehot[np.arange(len(target_onehot)), self.curr_y] = 1
         softmax_minus_target = self.activation2_softmax - target_onehot
-        # multiply hidden layer activation with (softmax_output - target_onehot) for each combination, ergo each weight
-        w2_gradients = np.stack([sof[:, np.newaxis] @ act[np.newaxis, :] for act, sof in zip(self.activation1_relu.T, softmax_minus_target)], axis=0)
-        b2_gradients = softmax_minus_target
+        ''' the next line takes advantage of numpy broadcasting. It makes sense to include the loss used for weight
+        updates already in the gradient calculation step, which is also mathematically correct, if one assumes that
+        these are the gradients of the averaged batch loss'''
+        softmax_minus_target_mult_loss = softmax_minus_target * self.loss[:, np.newaxis]
+        ''' multiply hidden layer activation with (softmax_output - target_onehot) for each combination, ergo each weight
+        # sof[:, np.newaxis] @ act[np.newaxis, :] adds one axis to each vector to perform matrix multiplication
+        # (10x1 * 1x784) '''
+        self.w2_gradients = np.stack([sof[:, np.newaxis] @ act[np.newaxis, :] for act, sof in zip(self.activation1_relu.T, softmax_minus_target_mult_loss)], axis=0)
+        self.b2_gradients = softmax_minus_target_mult_loss
         # Add up the gradients of all weights connected to the respective activation1 and ignore gradients, where
         # the activation is <= 0 to account for ReLU activation
-        activation1_gradients = np.multiply(np.sum(np.transpose(w2_gradients, (0,2,1)), axis=2), (self.activation1>0).T)
+        activation1_gradients = np.multiply(np.sum(np.transpose(self.w2_gradients, (0,2,1)), axis=2), (self.activation1>0).T)
+        self.w1_gradients = np.stack(grad[:, np.newaxis] @ x_in[np.newaxis, :] for grad, x_in in zip(activation1_gradients, self.curr_x))
+        self.b1_gradients = activation1_gradients
         
+    def update_weights(self):
+        w1_grad_avg = np.mean(self.w1_gradients, axis=0)
+        b1_grad_avg = np.mean(self.b1_gradients, axis=0)
+        w2_grad_avg = np.mean(self.w2_gradients, axis=0)
+        b2_grad_avg = np.mean(self.b2_gradients, axis=0)
+        self.w1 -= self.lr * w1_grad_avg 
+        self.b1 -= self.lr * b1_grad_avg
+        self.w2 -= self.lr * w2_grad_avg
+        self.b2 -= self.lr * b2_grad_avg
         
-        
-        
-        
-        self.gradient2_softmax = gradient_matrix
-        local_gradient2 = 0
-        """ as all gradients in gradient2_softmax are zero except for one, we only need to look at that one combination.
-        This reduces gradient2 to a formula with one multiplication except for a sun of 10 multiplications."""
-        self.gradient2 = 0
-
-    def train(self, x, y, batchSize=3, shuffle=True):
-        xEpoch = x
-        yEpoch = y
+    def train(self, x, y, batch_size=3, shuffle=True, epochs=1):
+        x_epoch = x
+        y_epoch = y
         if shuffle:
             shuffler = np.random.permutation(len(x))
-            xEpoch = xEpoch[shuffler]
-            yEpoch = yEpoch[shuffler]
-        numData = len(xEpoch)
-        for j in range(int(numData / batchSize) + 1):
-            start = j * batchSize
-            end = min(start + batchSize, numData)
-            if start == end:
-                continue
-            currData = xEpoch[start:end]
-            currLabels = yEpoch[start:end]
-            self.zeroGrad()
-            pred = self.forward(currData)
-            loss = self.getNllLoss(pred, currLabels)
-            self.get_gradients(currLabels)
+            x_epoch = x_epoch[shuffler]
+            y_epoch = y_epoch[shuffler]
+        num_data = len(x_epoch)
+        for i in range(epochs):
+            for j in range(int(num_data / batch_size) + 1):
+                start = j * batch_size
+                end = min(start + batch_size, num_data)
+                if start == end:
+                    continue
+                self.curr_x = x_epoch[start:end]
+                self.curr_y = y_epoch[start:end]
+                pred = self.forward(self.curr_x)
+                self.loss = self.get_nll_loss(pred, self.curr_y)
+                print(f'Prediction is {np.argmax(pred, axis=1)}\nGround truth is {self.curr_y}\nLoss is {np.mean(self.loss)}, accuracy is {np.mean(np.argmax(pred, axis=1) == self.curr_y)*100}%')
+                self.get_gradients()
+                self.update_weights()
 
-
+    def set_lr(self, lr):
+        self.lr = lr
 
     @staticmethod
-    def getNllLoss(pred, target):
+    def get_nll_loss(pred, target):
         return -np.log(pred[np.arange(len(pred)), target])
 
